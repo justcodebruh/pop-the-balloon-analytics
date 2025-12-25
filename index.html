@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pop the Balloon - Sentiment Explorer</title>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            animation: slideDown 0.6s ease-out;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.95;
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+            font-size: 0.95em;
+            opacity: 0.9;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stat-badge {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .stat-positive { background-color: #10b981; }
+        .stat-negative { background-color: #ef4444; }
+        .stat-neutral { background-color: #9ca3af; }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+            animation: fadeIn 0.6s ease-out 0.2s backwards;
+        }
+
+        .filter-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .filter-btn.all {
+            background-color: white;
+            color: #667eea;
+        }
+
+        .filter-btn.positive {
+            background-color: #10b981;
+            color: white;
+        }
+
+        .filter-btn.negative {
+            background-color: #ef4444;
+            color: white;
+        }
+
+        .filter-btn.neutral {
+            background-color: #9ca3af;
+            color: white;
+        }
+
+        .filter-btn.active {
+            transform: scale(1.08);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        }
+
+        .filter-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        }
+
+        .filter-btn:not(.active) {
+            opacity: 0.6;
+        }
+
+        .cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            animation: fadeIn 0.6s ease-out 0.4s backwards;
+        }
+
+        .card {
+            border-radius: 12px;
+            padding: 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            display: flex;
+            flex-direction: column;
+            min-height: 250px;
+            transform-origin: center;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .card:hover::before {
+            left: 100%;
+        }
+
+        .card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+        }
+
+        .card.positive {
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+            border-left: 6px solid #10b981;
+        }
+
+        .card.negative {
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+            border-left: 6px solid #ef4444;
+        }
+
+        .card.neutral {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            border-left: 6px solid #9ca3af;
+        }
+
+        .sentiment-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            width: fit-content;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .sentiment-badge.positive {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #059669;
+        }
+
+        .sentiment-badge.negative {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: #dc2626;
+        }
+
+        .sentiment-badge.neutral {
+            background-color: rgba(156, 163, 175, 0.15);
+            color: #6b7280;
+        }
+
+        .card-author {
+            font-weight: 600;
+            font-size: 0.95em;
+            margin-bottom: 12px;
+            color: #1f2937;
+        }
+
+        .card-text {
+            flex: 1;
+            font-size: 0.95em;
+            line-height: 1.5;
+            margin-bottom: 16px;
+            color: #374151;
+            display: -webkit-box;
+            -webkit-line-clamp: 4;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid rgba(0, 0, 0, 0.1);
+            padding-top: 12px;
+            font-size: 0.85em;
+            color: #6b7280;
+        }
+
+        .card-stats {
+            display: flex;
+            gap: 16px;
+        }
+
+        .card-stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .card-score {
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        .card.positive .card-score {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #059669;
+        }
+
+        .card.negative .card-score {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #dc2626;
+        }
+
+        .card.neutral .card-score {
+            background-color: rgba(156, 163, 175, 0.2);
+            color: #6b7280;
+        }
+
+        .trending-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background-color: #fbbf24;
+            color: #78350f;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 60px 20px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .empty-state h3 {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
+
+        .loading {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 60px 20px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .cards-container {
+                grid-template-columns: 1fr;
+            }
+
+            .stats {
+                gap: 15px;
+            }
+
+            .controls {
+                gap: 8px;
+            }
+
+            .filter-btn {
+                padding: 10px 16px;
+                font-size: 0.9em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎈 Pop the Balloon</h1>
+            <p class="subtitle">Sentiment Analysis Explorer</p>
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-badge stat-positive"></span>
+                    <span id="stat-positive">0 Positive</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-badge stat-negative"></span>
+                    <span id="stat-negative">0 Negative</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-badge stat-neutral"></span>
+                    <span id="stat-neutral">0 Neutral</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="controls">
+            <button class="filter-btn all active" data-filter="all">All Comments</button>
+            <button class="filter-btn positive" data-filter="Positive">😊 Positive</button>
+            <button class="filter-btn negative" data-filter="Negative">😠 Negative</button>
+            <button class="filter-btn neutral" data-filter="Neutral">😐 Neutral</button>
+        </div>
+
+        <div class="cards-container" id="cards-container">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Loading comments...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allComments = [];
+        let currentFilter = 'all';
+        const trendingLikesThreshold = 3; // Comments with 3+ likes are trending
+
+        // Load CSV data
+        async function loadData() {
+            try {
+                const response = await fetch('pop_the_balloon_sentiment_analysis.csv');
+                const csvData = await response.text();
+                
+                Papa.parse(csvData, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        allComments = results.data.filter(row => row.author_name);
+                        renderCards();
+                        updateStats();
+                    },
+                    error: (error) => {
+                        console.error('CSV parsing error:', error);
+                        showError('Failed to load data');
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading CSV:', error);
+                showError('Failed to load CSV file');
+            }
+        }
+
+        function updateStats() {
+            const positive = allComments.filter(c => c.sentiment === 'Positive').length;
+            const negative = allComments.filter(c => c.sentiment === 'Negative').length;
+            const neutral = allComments.filter(c => c.sentiment === 'Neutral').length;
+
+            document.getElementById('stat-positive').textContent = `${positive} Positive`;
+            document.getElementById('stat-negative').textContent = `${negative} Negative`;
+            document.getElementById('stat-neutral').textContent = `${neutral} Neutral`;
+        }
+
+        function renderCards() {
+            const container = document.getElementById('cards-container');
+            
+            let filtered = allComments;
+            if (currentFilter !== 'all') {
+                filtered = allComments.filter(c => c.sentiment === currentFilter);
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No comments found</h3><p>Try adjusting your filters</p></div>';
+                return;
+            }
+
+            // Calculate 90th percentile for trending threshold
+            const likes = filtered.map(c => parseInt(c.likes) || 0).sort((a, b) => a - b);
+            const percentile90 = likes[Math.floor(likes.length * 0.9)];
+
+            // Sort: trending first (by likes descending), then non-trending (by likes descending)
+            const sorted = filtered.sort((a, b) => {
+                const aLikes = parseInt(a.likes) || 0;
+                const bLikes = parseInt(b.likes) || 0;
+                const aIsTrending = aLikes >= percentile90 && percentile90 > 0;
+                const bIsTrending = bLikes >= percentile90 && percentile90 > 0;
+                
+                // Trending first
+                if (aIsTrending !== bIsTrending) {
+                    return aIsTrending ? -1 : 1;
+                }
+                // Within same tier, sort by likes descending
+                return bLikes - aLikes;
+            });
+
+            container.innerHTML = sorted.map((comment, index) => {
+                const sentiment = comment.sentiment.toLowerCase();
+                const commentLikes = parseInt(comment.likes) || 0;
+                const replies = parseInt(comment.reply_count) || 0;
+                const score = parseFloat(comment.compound_score) || 0;
+                const isTrending = commentLikes >= percentile90 && percentile90 > 0;
+                
+                // Truncate comment text if too long
+                const textPreview = comment.comment_text.length > 150 
+                    ? comment.comment_text.substring(0, 150) + '...' 
+                    : comment.comment_text;
+
+                return `
+                    <div class="card ${sentiment}" data-index="${index}">
+                        ${isTrending ? '<div class="trending-badge">🔥 Trending</div>' : ''}
+                        <div class="sentiment-badge ${sentiment}">
+                            <span>${sentiment}</span>
+                        </div>
+                        <div class="card-author">@${escapeHtml(comment.author_name)}</div>
+                        <div class="card-text">${escapeHtml(textPreview)}</div>
+                        <div class="card-footer">
+                            <div class="card-stats">
+                                <div class="card-stat">
+                                    <span>👍</span>
+                                    <span>${commentLikes}</span>
+                                </div>
+                                <div class="card-stat">
+                                    <span>💬</span>
+                                    <span>${replies}</span>
+                                </div>
+                            </div>
+                            <div class="card-score">${score.toFixed(2)}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Add click handlers
+            document.querySelectorAll('.card').forEach(card => {
+                card.addEventListener('click', () => {
+                    const index = card.dataset.index;
+                    const comment = filtered[index];
+                    showCommentDetail(comment);
+                });
+            });
+        }
+
+        function showCommentDetail(comment) {
+            // Simple modal-like behavior: log to console and show in alert
+            const sentiment = comment.sentiment.toLowerCase();
+            const message = `
+@${comment.author_name}
+
+${comment.comment_text}
+
+━━━━━━━━━━━━━━━━━━
+Sentiment: ${comment.sentiment}
+Score: ${comment.compound_score}
+Likes: ${comment.likes}
+Replies: ${comment.reply_count}
+            `.trim();
+            
+            alert(message);
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function showError(message) {
+            document.getElementById('cards-container').innerHTML = 
+                `<div class="empty-state"><h3>Error</h3><p>${message}</p></div>`;
+        }
+
+        // Filter button handlers
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                renderCards();
+            });
+        });
+
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>
